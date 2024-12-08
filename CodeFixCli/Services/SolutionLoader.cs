@@ -10,6 +10,11 @@ namespace CodeFixCli.Services
     {
         public SolutionLoader()
         {
+           
+        }
+
+        private static void RegisterMsBuild()
+        {
             try
             {
                 MSBuildLocator.RegisterDefaults();
@@ -20,11 +25,15 @@ namespace CodeFixCli.Services
                 if (!visualStudioInstances.Any())
                 {
                     Console.WriteLine("No VisualStudioInstances instances detected.");
+                    string msBuildBinPath = ToolLocationHelper.GetPathToBuildTools(
+                        ToolLocationHelper.CurrentToolsVersion
+                    );
 
-                    var msbuildPath = ThisAssembly.Project.DefaultMSBuildBinPath;
-                    MSBuildLocator.RegisterMSBuildPath(msbuildPath);
-
-                    Console.WriteLine($"Manually registered MSBuild at: {msbuildPath}");
+                    if (!MSBuildLocator.IsRegistered)
+                    {
+                        MSBuildLocator.RegisterMSBuildPath(msBuildBinPath);
+                        Console.WriteLine($"Manually registered MSBuild at: {msBuildBinPath}");
+                    }
                 }
                 else
                 {
@@ -48,6 +57,7 @@ namespace CodeFixCli.Services
 
         public async Task<Solution> LoadSolutionAsync(string solutionPath)
         {
+            RegisterMsBuild();
             var workspace = MSBuildWorkspace.Create();
             return await workspace.OpenSolutionAsync(solutionPath);
         }

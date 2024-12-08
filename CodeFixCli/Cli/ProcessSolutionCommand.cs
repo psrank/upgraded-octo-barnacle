@@ -26,39 +26,65 @@ namespace CodeFixCli.Cli
 
         public override int Execute(CommandContext context, Settings settings)
         {
-            string solutionPath;
+            List<string> solutions;
 
             if (string.IsNullOrWhiteSpace(settings.Folder))
             {
-                // Prompt the user for the folder path if not provided
                 AnsiConsole.MarkupLine("[yellow]No folder path provided.[/]");
-                solutionPath = AnsiConsole.Prompt(
-                    new TextPrompt<string>("Please enter the [green]path to the solution file[/]:")
+                string solutionPath = AnsiConsole.Prompt(
+                    new TextPrompt<string>("Please enter the [green]path to the solution file or folder[/]:")
                         .Validate(path =>
                         {
-                            if (File.Exists(path) && path.EndsWith(".sln"))
-                                return ValidationResult.Success();
-                            return ValidationResult.Error("[red]Invalid solution file path. Please try again.[/]");
+                            if (File.Exists(path) && path.EndsWith(".sln")) return ValidationResult.Success();
+                            if (Directory.Exists(path)) return ValidationResult.Success();
+                            return ValidationResult.Error("[red]Invalid path. Please try again.[/]");
                         }));
+
+                // If user provided a direct path to a .sln file
+                if (File.Exists(solutionPath) && solutionPath.EndsWith(".sln"))
+                {
+                    return ProcessSolutionWithMenu(solutionPath).GetAwaiter().GetResult();
+                }
+                else
+                {
+                    // Treat the given path as a folder and find solutions in it
+                    solutions = _solutionLoader.GetSolutionPaths(solutionPath);
+                }
             }
             else
             {
-                solutionPath = _solutionLoader.GetSolutionPath(settings.Folder);
-                if (solutionPath == null)
-                {
-                    AnsiConsole.MarkupLine("[red]Error:[/] No solution file found in the specified folder.");
-                    return -1;
-                }
+                solutions = _solutionLoader.GetSolutionPaths(settings.Folder);
             }
 
+            if (solutions.Count == 0)
+            {
+                AnsiConsole.MarkupLine("[red]Error:[/] No solution files found in the specified folder.");
+                return -1;
+            }
 
-            AnsiConsole.MarkupLine($"[green]Processing solution:[/] {solutionPath}");
-            ProcessSolutionWithMenu(solutionPath).GetAwaiter().GetResult();
+            string finalSolutionPath;
+            if (solutions.Count == 1)
+            {
+                // If there's only one solution, just use it
+                finalSolutionPath = solutions[0];
+            }
+            else
+            {
+                // Multiple solutions: prompt user to pick one
+                finalSolutionPath = AnsiConsole.Prompt(
+                    new SelectionPrompt<string>()
+                        .Title("Multiple .sln files found. Please select one:")
+                        .AddChoices(solutions));
+            }
+
+            AnsiConsole.MarkupLine($"[green]Processing solution:[/] {finalSolutionPath}");
+            ProcessSolutionWithMenu(finalSolutionPath).GetAwaiter().GetResult();
 
             return 0;
         }
 
-        private async Task ProcessSolutionWithMenu(string solutionPath)
+
+        private async Task<int> ProcessSolutionWithMenu(string solutionPath)
         {
             var solution = await _solutionLoader.LoadSolutionAsync(solutionPath);
 
@@ -91,6 +117,8 @@ namespace CodeFixCli.Cli
             AnsiConsole.MarkupLine("[green]Saving changes...[/]");
             await _solutionLoader.SaveSolutionAsync(solution);
             AnsiConsole.MarkupLine("[green]All changes saved successfully![/]");
+            
+            return 0; 
         }
 
         private void ListProjects(Solution solution)
@@ -108,5 +136,3 @@ namespace CodeFixCli.Cli
         }
     }
 }
-
-

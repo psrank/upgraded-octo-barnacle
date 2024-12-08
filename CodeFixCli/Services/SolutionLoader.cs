@@ -62,6 +62,14 @@ namespace CodeFixCli.Services
             return await workspace.OpenSolutionAsync(solutionPath);
         }
 
+        public List<string> GetSolutionPaths(string folderPath)
+        {
+            if (!Directory.Exists(folderPath))
+                return new List<string>();
+
+            var solutions = Directory.GetFiles(folderPath, "*.sln").ToList();
+            return solutions;
+        }
         public async Task SaveSolutionAsync(Solution solution)
         {
             foreach (var project in solution.Projects)
